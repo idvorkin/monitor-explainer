@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import './App.css'
 
-type AspectRatio = '16:9' | '21:9' | '32:9'
-type Resolution = '1440p' | '2160p'
+type AspectRatio = '16:9' | '21:9' | '32:9' | '3:2' | '16:18'
+type Resolution = '1440p' | '2160p' | '2560p' | '2880p'
 
 interface Monitor {
   diagonal: number
@@ -21,23 +21,75 @@ const monitors: Monitor[] = [
   { diagonal: 32, aspectRatio: '16:9', resolution: '2160p', width: 27.9, height: 15.7, resolutionX: 3840, resolutionY: 2160, name: '32" Standard' },
   { diagonal: 43, aspectRatio: '16:9', resolution: '2160p', width: 37.5, height: 21.1, resolutionX: 3840, resolutionY: 2160, name: '43" Standard' },
 
-  // 21:9 Ultrawide
+  // 21:9 Ultrawide. Inches come from the labelled aspect, as everywhere else here:
+  // 5120x2160 is exactly 64:27 and 3440x1440 exactly 43:18, but every vendor sells
+  // both as "21:9", so 21:9 is what the rows are drawn from. Under true 64:27 the
+  // 45" would be 41.5 x 17.5 and the 52" 47.9 x 20.2 - a rounding apart, and not
+  // worth two conventions in one column.
   { diagonal: 34, aspectRatio: '21:9', resolution: '1440p', width: 31.3, height: 13.4, resolutionX: 3440, resolutionY: 1440, name: '34" Ultrawide' },
   { diagonal: 40, aspectRatio: '21:9', resolution: '2160p', width: 36.8, height: 15.8, resolutionX: 5120, resolutionY: 2160, name: '40" Ultrawide' },
+  // These two ship, so they get names. LG 45GX950A: 45" W-OLED, 800R, ~123 PPI.
+  // LG UltraGear evo G9 52G930B: 52" VA, 1000R, 240Hz, $1,999 - same 5120x2160
+  // stretched over 7 more inches of diagonal, so ~107 PPI.
+  { diagonal: 45, aspectRatio: '21:9', resolution: '2160p', width: 41.4, height: 17.7, resolutionX: 5120, resolutionY: 2160, name: '45" 5K2K (LG)' },
+  { diagonal: 52, aspectRatio: '21:9', resolution: '2160p', width: 47.8, height: 20.5, resolutionX: 5120, resolutionY: 2160, name: '52" 5K2K (LG)' },
 
   // 32:9 Super-ultrawide
   { diagonal: 49, aspectRatio: '32:9', resolution: '1440p', width: 47.2, height: 13.3, resolutionX: 5120, resolutionY: 1440, name: '49" Super-wide' },
   { diagonal: 57, aspectRatio: '32:9', resolution: '2160p', width: 54.9, height: 15.4, resolutionX: 7680, resolutionY: 2160, name: '57" Super-wide' },
+
+  // Tall / productivity (physical inches from diagonal: width = D*A/sqrt(A^2+B^2))
+  { diagonal: 28.2, aspectRatio: '3:2', resolution: '2560p', width: 23.5, height: 15.6, resolutionX: 3840, resolutionY: 2560, name: '28.2" MateView (3:2)' },
+  { diagonal: 27.6, aspectRatio: '16:18', resolution: '2880p', width: 18.3, height: 20.6, resolutionX: 2560, resolutionY: 2880, name: '27.6" DualUp (16:18)' },
+]
+
+// Landing selection, by name: positional indices silently pick a different monitor
+// the moment a row is inserted above them.
+const defaultSelectionNames = ['27" Standard', '34" Ultrawide', '49" Super-wide']
+
+// Column order for the catalog grid and the canvas legend
+const aspectColumns: { aspect: AspectRatio; header: string; legend: string }[] = [
+  { aspect: '16:9', header: 'Standard (16:9)', legend: '16:9 Standard' },
+  { aspect: '21:9', header: 'Ultrawide (21:9)', legend: '21:9 Ultrawide' },
+  { aspect: '32:9', header: 'Super-wide (32:9)', legend: '32:9 Super-wide' },
+  { aspect: '3:2', header: 'Tall (3:2)', legend: '3:2 Tall' },
+  { aspect: '16:18', header: 'Square-ish (16:18)', legend: '16:18 Square-ish' },
+]
+
+const aspectColors: Record<AspectRatio, string> = {
+  '16:9': '#3b82f6',
+  '21:9': '#8b5cf6',
+  '32:9': '#ec4899',
+  '3:2': '#f59e0b',
+  '16:18': '#14b8a6',
+}
+
+// Declared low-to-high; iteration order is the canvas group order
+const resolutionLabels: Record<Resolution, string> = {
+  '1440p': '1440p (2K)',
+  '2160p': '2160p (4K)',
+  '2560p': '2560p',
+  '2880p': '2880p',
+}
+
+// Shared by the catalog grid and the canvas so the two can't drift.
+// The old 14-20 band held nothing above 15.8"; the 45" 5K2K at 17.7" would have
+// been filed under "~16" tall" and read as two inches shorter than it is.
+const heightBands: { label: string; min: number; max: number }[] = [
+  { label: '~13" tall', min: 0, max: 14 },
+  { label: '~16" tall', min: 14, max: 17 },
+  { label: '~18" tall', min: 17, max: 20 },
+  // Last band stays open-ended: both the grid and the canvas filter through these,
+  // so anything above the top band would silently disappear from both.
+  { label: '~21" tall', min: 20, max: Infinity },
 ]
 
 type ViewMode = 'height' | 'resolution' | 'overlay'
 
 function App() {
-  const [selectedMonitors, setSelectedMonitors] = useState<Monitor[]>([
-    monitors[0], // 27" standard
-    monitors[3], // 34" ultrawide
-    monitors[5], // 49" super-wide
-  ])
+  const [selectedMonitors, setSelectedMonitors] = useState<Monitor[]>(
+    monitors.filter(m => defaultSelectionNames.includes(m.name))
+  )
   const [viewMode, setViewMode] = useState<ViewMode>('height')
 
   // Pan and zoom state
@@ -192,8 +244,150 @@ function App() {
   const maxWidth = Math.max(...monitors.map(m => m.width))
   const scale = 600 / maxWidth // pixels per inch
 
+  // One entry per selected monitor; the index keeps duplicates of the same
+  // model independently draggable
+  const entries = selectedMonitors.map((monitor, index) => ({
+    monitor,
+    index,
+    id: `${monitor.name}-${index}`,
+  }))
+  type Entry = (typeof entries)[number]
+
+  // Space a monitor occupies on the canvas, after any rotation
+  const footprintOf = (entry: Entry) =>
+    getRotatedDimensions(entry.monitor.width * scale, entry.monitor.height * scale, monitorRotations[entry.id] || 0)
+
+  // Draw one monitor so that its rotated footprint starts at (footprintX, footprintY).
+  // The rect is centred on the footprint centre and rotated about that same point,
+  // which keeps portrait and near-square panels aligned with their own labels.
+  const renderMonitor = (entry: Entry, footprintX: number, footprintY: number, opacity: number, showDetails: boolean) => {
+    const { monitor, index, id } = entry
+    const baseRectWidth = monitor.width * scale
+    const baseRectHeight = monitor.height * scale
+    const rotation = monitorRotations[id] || 0
+    const footprint = footprintOf(entry)
+    const position = monitorPositions[id] || { x: 0, y: 0 }
+    const finalX = footprintX + position.x
+    const finalY = footprintY + position.y
+    const centerX = finalX + footprint.width / 2
+    const centerY = finalY + footprint.height / 2
+
+    return (
+      <g key={id}>
+        <g
+          transform={`rotate(${rotation} ${centerX} ${centerY})`}
+          style={{ cursor: 'move', transition: draggingMonitor === id ? 'none' : 'all 0.5s ease' }}
+          onMouseDown={(e) => handleMonitorMouseDown(e, id)}
+        >
+          <rect
+            x={centerX - baseRectWidth / 2}
+            y={centerY - baseRectHeight / 2}
+            width={baseRectWidth}
+            height={baseRectHeight}
+            fill={aspectColors[monitor.aspectRatio]}
+            stroke="#1e40af"
+            strokeWidth="2"
+            opacity={opacity}
+          />
+          <text
+            x={showDetails ? centerX : centerX - baseRectWidth / 2 + 8}
+            y={showDetails ? centerY - 10 : centerY + baseRectHeight / 2 - 8}
+            textAnchor={showDetails ? 'middle' : 'start'}
+            fontSize="14"
+            fontWeight="bold"
+            fill={showDetails ? 'white' : '#1e293b'}
+          >
+            {monitor.name}
+          </text>
+          {showDetails && (
+            <>
+              <text x={centerX} y={centerY + 10} textAnchor="middle" fontSize="12" fill="white">
+                {monitor.resolutionX}×{monitor.resolutionY}
+              </text>
+              <text x={centerX} y={centerY + 25} textAnchor="middle" fontSize="11" fill="white">
+                {monitor.width.toFixed(1)}" × {monitor.height.toFixed(1)}"
+              </text>
+            </>
+          )}
+        </g>
+        {/* Rotate button */}
+        <g
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            e.stopPropagation()
+            rotateMonitor(id)
+          }}
+        >
+          <circle cx={finalX + 10} cy={finalY + 10} r="8" fill="#22c55e" stroke="white" strokeWidth="1" />
+          <text
+            x={finalX + 10}
+            y={finalY + 10}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontWeight="bold"
+            fill="white"
+          >
+            ↻
+          </text>
+        </g>
+        {/* Close button */}
+        <g
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            e.stopPropagation()
+            removeMonitor(index)
+          }}
+        >
+          <circle cx={finalX + footprint.width - 10} cy={finalY + 10} r="8" fill="#ef4444" stroke="white" strokeWidth="1" />
+          <text
+            x={finalX + footprint.width - 10}
+            y={finalY + 10}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="12"
+            fontWeight="bold"
+            fill="white"
+          >
+            ×
+          </text>
+        </g>
+      </g>
+    )
+  }
+
+  // Group the canvas by height class or by resolution, then stack the groups top
+  // to bottom using each row's tallest footprint, so a 25"-tall or portrait panel
+  // can't overlap the row below it.
+  const rawGroups =
+    viewMode === 'height'
+      ? heightBands.map(band => ({
+          label: band.label,
+          entries: entries.filter(e => e.monitor.height >= band.min && e.monitor.height < band.max),
+        }))
+      : (Object.keys(resolutionLabels) as Resolution[]).map(resolution => ({
+          label: resolutionLabels[resolution],
+          entries: entries.filter(e => e.monitor.resolution === resolution),
+        }))
+
+  let nextGroupY = 60
+  const groups = rawGroups
+    .filter(group => group.entries.length > 0)
+    .map(group => {
+      const y = nextGroupY
+      nextGroupY += Math.max(...group.entries.map(e => footprintOf(e).height)) + 40
+      return { ...group, y }
+    })
+
+  const contentBottom =
+    viewMode === 'overlay'
+      ? 50 + Math.max(0, ...entries.map(e => footprintOf(e).height))
+      : nextGroupY
+
   // Calculate viewBox based on zoom and pan
-  const baseViewBox = { x: 0, y: 0, width: 700, height: 400 }
+  const baseViewBox = { x: 0, y: 0, width: 700, height: Math.max(400, contentBottom + 40) }
+  const legendY = baseViewBox.height - 20
+  const svgHeight = Math.min(baseViewBox.height, 800)
   const viewBoxWidth = baseViewBox.width / zoom
   const viewBoxHeight = baseViewBox.height / zoom
   const viewBoxX = baseViewBox.x - (panX / zoom)
@@ -239,7 +433,10 @@ function App() {
                 <li><strong>16:9</strong> - Standard</li>
                 <li><strong>21:9</strong> - Ultrawide (1.3× wider)</li>
                 <li><strong>32:9</strong> - Super-wide (2× wider)</li>
+                <li><strong>3:2</strong> - Tall (1.2× taller for the same width)</li>
+                <li><strong>16:18</strong> - Taller than it is wide (LG DualUp)</li>
               </ul>
+              <p>3:2 buys vertical space for documents and code, at the cost of width for side-by-side windows.</p>
             </div>
 
             <div className="dimension-card">
@@ -257,6 +454,7 @@ function App() {
               <ul>
                 <li><strong>1440p</strong> - 2K (1440 pixels tall)</li>
                 <li><strong>2160p</strong> - 4K (2160 pixels tall)</li>
+                <li><strong>2560p / 2880p</strong> - Tall panels, more pixels of height</li>
               </ul>
             </div>
           </div>
@@ -319,86 +517,40 @@ function App() {
 
           <p>Select monitors to compare (click to add, can add multiple of same model):</p>
 
-          <div className="monitor-catalog-grid">
+          <div
+            className="monitor-catalog-grid"
+            style={{ '--aspect-cols': aspectColumns.length } as CSSProperties}
+          >
             <div className="catalog-header">
               <div className="size-label">Height</div>
-              <div className="aspect-label">Standard (16:9)</div>
-              <div className="aspect-label">Ultrawide (21:9)</div>
-              <div className="aspect-label">Super-wide (32:9)</div>
+              {aspectColumns.map(column => (
+                <div className="aspect-label" key={column.aspect}>{column.header}</div>
+              ))}
             </div>
 
-            {/* ~13" tall row */}
-            <div className="catalog-row">
-              <div className="size-label">~13" tall</div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 13 && m.height < 15 && m.aspectRatio === '16:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
+            {heightBands.map(band => (
+              <div className="catalog-row" key={band.label}>
+                <div className="size-label">{band.label}</div>
+                {aspectColumns.map(column => {
+                  const cellMonitors = monitors.filter(
+                    m => m.aspectRatio === column.aspect && m.height >= band.min && m.height < band.max
+                  )
+                  if (cellMonitors.length === 0) {
+                    return <div className="catalog-cell empty" key={column.aspect}>—</div>
+                  }
+                  return (
+                    <div className="catalog-cell" key={column.aspect}>
+                      {cellMonitors.map(monitor => (
+                        <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
+                          <div>{monitor.name}</div>
+                          <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
               </div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 13 && m.height < 15 && m.aspectRatio === '21:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 13 && m.height < 15 && m.aspectRatio === '32:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ~16" tall row */}
-            <div className="catalog-row">
-              <div className="size-label">~16" tall</div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 15 && m.height < 20 && m.aspectRatio === '16:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 15 && m.height < 20 && m.aspectRatio === '21:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 15 && m.height < 20 && m.aspectRatio === '32:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ~21" tall row */}
-            <div className="catalog-row">
-              <div className="size-label">~21" tall</div>
-              <div className="catalog-cell">
-                {monitors.filter(m => m.height >= 20 && m.aspectRatio === '16:9').map(monitor => (
-                  <button key={monitor.name} className="monitor-chip" onClick={() => toggleMonitor(monitor)}>
-                    <div>{monitor.name}</div>
-                    <span className="chip-details">{monitor.resolutionX}×{monitor.resolutionY}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="catalog-cell empty">—</div>
-              <div className="catalog-cell empty">—</div>
-            </div>
+            ))}
           </div>
 
           <div className="view-mode-selector">
@@ -468,282 +620,41 @@ function App() {
           >
             <svg
               width="100%"
-              height="400"
+              height={svgHeight}
               viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`}
               style={{ border: '1px solid #ccc', background: '#f5f5f5' }}
               onWheel={handleWheel}
             >
               {/* Dynamic grouping based on view mode */}
-              {(() => {
-                if (viewMode === 'overlay') {
-                  // Overlay mode: stack all monitors from same origin
-                  const baseX = 50
-                  const baseY = 50
-                  return selectedMonitors.map((monitor, index) => {
-                    const monitorId = `${monitor.name}-${index}`
-                    const baseRectWidth = monitor.width * scale
-                    const baseRectHeight = monitor.height * scale
-                    const rotation = monitorRotations[monitorId] || 0
-                    const rotatedDims = getRotatedDimensions(baseRectWidth, baseRectHeight, rotation)
-                    const position = monitorPositions[monitorId] || { x: 0, y: 0 }
-                    const finalX = baseX + position.x
-                    const finalY = baseY + position.y
-
-                    // Center point for rotation
-                    const centerX = finalX + rotatedDims.width / 2
-                    const centerY = finalY + rotatedDims.height / 2
-
+              {viewMode === 'overlay'
+                ? entries.map(entry => renderMonitor(entry, 50, 50, 0.4, false))
+                : groups.map(group => {
+                    let xOffset = 20
                     return (
-                      <g key={monitorId}>
-                        <g
-                          transform={`rotate(${rotation} ${centerX} ${centerY})`}
-                          style={{ cursor: 'move', transition: draggingMonitor === monitorId ? 'none' : 'all 0.5s ease' }}
-                          onMouseDown={(e) => handleMonitorMouseDown(e, monitorId)}
-                        >
-                          <rect
-                            x={finalX}
-                            y={finalY}
-                            width={baseRectWidth}
-                            height={baseRectHeight}
-                            fill={monitor.aspectRatio === '16:9' ? '#3b82f6' : monitor.aspectRatio === '21:9' ? '#8b5cf6' : '#ec4899'}
-                            stroke="#1e40af"
-                            strokeWidth="2"
-                            opacity="0.4"
-                          />
-                          <text
-                            x={finalX + baseRectWidth / 2}
-                            y={finalY + baseRectHeight / 2}
-                            textAnchor="middle"
-                            fontSize="14"
-                            fontWeight="bold"
-                            fill="white"
-                          >
-                            {monitor.name}
-                          </text>
-                        </g>
-                        {/* Rotate button */}
-                        <g
-                          style={{ cursor: 'pointer' }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            rotateMonitor(monitorId)
-                          }}
-                        >
-                          <circle
-                            cx={finalX + 10}
-                            cy={finalY + 10}
-                            r="8"
-                            fill="#22c55e"
-                            stroke="white"
-                            strokeWidth="1"
-                          />
-                          <text
-                            x={finalX + 10}
-                            y={finalY + 10}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            fontSize="10"
-                            fontWeight="bold"
-                            fill="white"
-                          >
-                            ↻
-                          </text>
-                        </g>
-                        {/* Close button */}
-                        <g
-                          style={{ cursor: 'pointer' }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeMonitor(index)
-                          }}
-                        >
-                          <circle
-                            cx={finalX + rotatedDims.width - 10}
-                            cy={finalY + 10}
-                            r="8"
-                            fill="#ef4444"
-                            stroke="white"
-                            strokeWidth="1"
-                          />
-                          <text
-                            x={finalX + rotatedDims.width - 10}
-                            y={finalY + 10}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            fontSize="12"
-                            fontWeight="bold"
-                            fill="white"
-                          >
-                            ×
-                          </text>
-                        </g>
+                      <g key={group.label}>
+                        {/* Group label, above the row so monitors can't cover it */}
+                        <text x="10" y={group.y - 6} fontSize="12" fill="#666">
+                          {group.label}
+                        </text>
+
+                        {/* Monitors in this group */}
+                        {group.entries.map(entry => {
+                          const rect = renderMonitor(entry, xOffset, group.y, 0.7, true)
+                          xOffset += footprintOf(entry).width + 20
+                          return rect
+                        })}
                       </g>
                     )
-                  })
-                }
-
-                // Height or Resolution grouping
-                const groups = viewMode === 'height'
-                  ? [
-                      { label: '~13" tall', monitors: selectedMonitors.filter(m => m.height < 14), y: 50 },
-                      { label: '~16" tall', monitors: selectedMonitors.filter(m => m.height >= 14 && m.height < 20), y: 200 },
-                      { label: '~21" tall', monitors: selectedMonitors.filter(m => m.height >= 20), y: 300 },
-                    ]
-                  : [
-                      { label: '1440p (2K)', monitors: selectedMonitors.filter(m => m.resolution === '1440p'), y: 50 },
-                      { label: '2160p (4K)', monitors: selectedMonitors.filter(m => m.resolution === '2160p'), y: 200 },
-                    ]
-
-                return groups.map(group => {
-                  if (group.monitors.length === 0) return null
-
-                  let xOffset = 20
-                  return (
-                    <g key={group.label}>
-                      {/* Group label */}
-                      <text x="10" y={group.y + 10} fontSize="12" fill="#666">
-                        {group.label}
-                      </text>
-
-                      {/* Monitors in this group */}
-                      {group.monitors.map((monitor) => {
-                        // Find the index of this monitor in the full selectedMonitors array
-                        const globalIndex = selectedMonitors.findIndex(m => m === monitor)
-                        const monitorId = `${monitor.name}-${globalIndex}`
-                        const baseRectWidth = monitor.width * scale
-                        const baseRectHeight = monitor.height * scale
-                        const rotation = monitorRotations[monitorId] || 0
-                        const rotatedDims = getRotatedDimensions(baseRectWidth, baseRectHeight, rotation)
-                        const position = monitorPositions[monitorId] || { x: 0, y: 0 }
-                        const finalX = xOffset + position.x
-                        const finalY = group.y + position.y
-
-                        // Center point for rotation
-                        const centerX = finalX + rotatedDims.width / 2
-                        const centerY = finalY + rotatedDims.height / 2
-
-                        const rect = (
-                          <g key={monitorId}>
-                            <g
-                              transform={`rotate(${rotation} ${centerX} ${centerY})`}
-                              style={{ cursor: 'move', transition: draggingMonitor === monitorId ? 'none' : 'all 0.5s ease' }}
-                              onMouseDown={(e) => handleMonitorMouseDown(e, monitorId)}
-                            >
-                              <rect
-                                x={finalX}
-                                y={finalY}
-                                width={baseRectWidth}
-                                height={baseRectHeight}
-                                fill={monitor.aspectRatio === '16:9' ? '#3b82f6' : monitor.aspectRatio === '21:9' ? '#8b5cf6' : '#ec4899'}
-                                stroke="#1e40af"
-                                strokeWidth="2"
-                                opacity="0.7"
-                              />
-                              <text
-                                x={finalX + baseRectWidth / 2}
-                                y={finalY + baseRectHeight / 2 - 10}
-                                textAnchor="middle"
-                                fontSize="14"
-                                fontWeight="bold"
-                                fill="white"
-                              >
-                                {monitor.name}
-                              </text>
-                              <text
-                                x={finalX + baseRectWidth / 2}
-                                y={finalY + baseRectHeight / 2 + 10}
-                                textAnchor="middle"
-                                fontSize="12"
-                                fill="white"
-                              >
-                                {monitor.resolutionX}×{monitor.resolutionY}
-                              </text>
-                              <text
-                                x={finalX + baseRectWidth / 2}
-                                y={finalY + baseRectHeight / 2 + 25}
-                                textAnchor="middle"
-                                fontSize="11"
-                                fill="white"
-                              >
-                                {monitor.width.toFixed(1)}" × {monitor.height.toFixed(1)}"
-                              </text>
-                            </g>
-                            {/* Rotate button */}
-                            <g
-                              style={{ cursor: 'pointer' }}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                rotateMonitor(monitorId)
-                              }}
-                            >
-                              <circle
-                                cx={finalX + 10}
-                                cy={finalY + 10}
-                                r="8"
-                                fill="#22c55e"
-                                stroke="white"
-                                strokeWidth="1"
-                              />
-                              <text
-                                x={finalX + 10}
-                                y={finalY + 10}
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                                fontSize="10"
-                                fontWeight="bold"
-                                fill="white"
-                              >
-                                ↻
-                              </text>
-                            </g>
-                            {/* Close button */}
-                            <g
-                              style={{ cursor: 'pointer' }}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                removeMonitor(globalIndex)
-                              }}
-                            >
-                              <circle
-                                cx={finalX + rotatedDims.width - 10}
-                                cy={finalY + 10}
-                                r="8"
-                                fill="#ef4444"
-                                stroke="white"
-                                strokeWidth="1"
-                              />
-                              <text
-                                x={finalX + rotatedDims.width - 10}
-                                y={finalY + 10}
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                                fontSize="12"
-                                fontWeight="bold"
-                                fill="white"
-                              >
-                                ×
-                              </text>
-                            </g>
-                          </g>
-                        )
-                        xOffset += rotatedDims.width + 20
-                        return rect
-                      })}
-                    </g>
-                  )
-                })
-              })()}
+                  })}
 
               {/* Legend */}
-              <g transform="translate(10, 380)">
-                <rect x="0" y="0" width="15" height="15" fill="#3b82f6" opacity="0.7" />
-                <text x="20" y="12" fontSize="12">16:9 Standard</text>
-
-                <rect x="120" y="0" width="15" height="15" fill="#8b5cf6" opacity="0.7" />
-                <text x="140" y="12" fontSize="12">21:9 Ultrawide</text>
-
-                <rect x="260" y="0" width="15" height="15" fill="#ec4899" opacity="0.7" />
-                <text x="280" y="12" fontSize="12">32:9 Super-wide</text>
+              <g transform={`translate(10, ${legendY})`}>
+                {aspectColumns.map((column, i) => (
+                  <g key={column.aspect} transform={`translate(${i * 140}, 0)`}>
+                    <rect x="0" y="0" width="15" height="15" fill={aspectColors[column.aspect]} opacity="0.7" />
+                    <text x="20" y="12" fontSize="12">{column.legend}</text>
+                  </g>
+                ))}
               </g>
             </svg>
           </div>
@@ -760,6 +671,11 @@ function App() {
             <div className="insight-card">
               <h3>Resolution Independence</h3>
               <p>A 32" 4K and a 43" 4K have the same pixels (3840×2160), but the 43" spreads them across more space - slightly less sharp.</p>
+            </div>
+
+            <div className="insight-card">
+              <h3>Same Width, More Height</h3>
+              <p>The 28.2" MateView (3:2) is 23.5" × 15.6" - the same width as the 27" 16:9 (23.5" × 13.2"), with 2.4" more height. That's 18% more screen area from the shape alone, off a diagonal only 1.2" bigger.</p>
             </div>
 
             <div className="insight-card">

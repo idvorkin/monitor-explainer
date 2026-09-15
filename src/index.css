@@ -30,6 +30,13 @@ body {
   min-height: 100vh;
 }
 
+/* Flex items default to min-width: auto, which lets wide content (the catalog
+   grid) stretch the page instead of scrolling inside its own container. */
+#root {
+  min-width: 0;
+  flex: 1;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

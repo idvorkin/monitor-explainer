@@ -9,9 +9,9 @@ An interactive web app that explains monitor dimensions, aspect ratios, resoluti
 - **Visual comparison** of different monitor sizes and aspect ratios
 - **Interactive selector** to compare monitors side-by-side
 - **Clear explanations** of the three dimensions:
-  1. Aspect ratio (16:9, 21:9, 32:9)
+  1. Aspect ratio (16:9, 21:9, 32:9, 3:2, 16:18)
   2. Physical size (height classes)
-  3. Resolution (1440p, 2160p)
+  3. Resolution (1440p through 2880p)
 - **Terminology decoder** for "p" vs "K" confusion
 - **Key insights** about monitor selection
 

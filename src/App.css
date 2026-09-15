@@ -261,16 +261,19 @@ h3 {
 
 /* Monitor Catalog Grid */
 .monitor-catalog-grid {
+  --catalog-label-width: 80px;
+  --catalog-cell-min: 110px;
   margin: 1.5rem 0;
   background: white;
   border-radius: 8px;
   border: 2px solid #cbd5e1;
-  overflow: hidden;
+  /* columns come from --aspect-cols, set in App.tsx; scroll rather than squash */
+  overflow: auto hidden;
 }
 
 .catalog-header {
   display: grid;
-  grid-template-columns: 80px 1fr 1fr 1fr;
+  grid-template-columns: var(--catalog-label-width) repeat(var(--aspect-cols, 3), minmax(var(--catalog-cell-min), 1fr));
   background: #f1f5f9;
   border-bottom: 2px solid #cbd5e1;
   font-weight: 600;
@@ -291,7 +294,7 @@ h3 {
 
 .catalog-row {
   display: grid;
-  grid-template-columns: 80px 1fr 1fr 1fr;
+  grid-template-columns: var(--catalog-label-width) repeat(var(--aspect-cols, 3), minmax(var(--catalog-cell-min), 1fr));
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -315,6 +318,8 @@ h3 {
   padding: 0.5rem;
   border-right: 1px solid #e2e8f0;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   align-items: center;
   justify-content: center;
   min-height: 70px;
@@ -492,9 +497,13 @@ footer a:hover {
     grid-template-columns: 1fr;
   }
 
+  .monitor-catalog-grid {
+    --catalog-label-width: 60px;
+    --catalog-cell-min: 90px;
+  }
+
   .catalog-header,
   .catalog-row {
-    grid-template-columns: 60px 1fr 1fr 1fr;
     font-size: 0.85rem;
   }
 
