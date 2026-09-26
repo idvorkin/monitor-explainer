@@ -418,6 +418,7 @@ function App() {
               <li><a href="#curved-monitors">Curved Monitors</a></li>
               <li><a href="#pixel-density">Pixel Density (PPI)</a></li>
               <li><a href="#panel-type">Panel Type (IPS/VA/TN)</a></li>
+              <li><a href="#mac-tools">Mac Tools for Display Management</a></li>
               <li><a href="#p-vs-k">The "p" vs "K" Confusion</a></li>
             </ul>
           </nav>
@@ -811,6 +812,80 @@ function App() {
               <li><strong>Movies, general use, dark room:</strong> VA (contrast and deep blacks)</li>
               <li><strong>Competitive gaming (CS:GO, Valorant):</strong> TN (speed beats everything)</li>
               <li><strong>General gaming, productivity:</strong> IPS (best all-around, modern IPS has decent response times)</li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="mac-tools" id="mac-tools">
+          <h2>Mac Tools for Display Management</h2>
+
+          <div className="dimension-card">
+            <h3>Command Line Tools</h3>
+            <p>Check your current resolution and refresh rate:</p>
+            <pre style={{ background: '#f5f5f5', padding: '1rem', borderRadius: '4px', overflow: 'auto' }}>
+{`# List all available resolutions
+system_profiler SPDisplaysDataType
+
+# Get current resolution
+system_profiler SPDisplaysDataType | grep Resolution`}
+            </pre>
+          </div>
+
+          <div className="dimension-card">
+            <h3>BetterDisplay - Force Custom Resolutions</h3>
+            <p><a href="https://github.com/waydabber/BetterDisplay" target="_blank" rel="noopener noreferrer">BetterDisplay</a> is a free, open-source tool that lets you:</p>
+            <ul>
+              <li>Force any resolution your display can handle</li>
+              <li>Override system limitations for refresh rates</li>
+              <li>Manage HiDPI and scaled resolutions</li>
+              <li>Control displays via command line</li>
+            </ul>
+            <p>Example CLI usage:</p>
+            <pre style={{ background: '#f5f5f5', padding: '1rem', borderRadius: '4px', overflow: 'auto' }}>
+{`# Set resolution and refresh rate
+betterdisplaycli set --resolution=3840x2160 --refreshRate=59.94Hz
+
+# Check current settings
+betterdisplaycli get --resolution --refreshRate`}
+            </pre>
+          </div>
+
+          <div className="dimension-card">
+            <h3>4K@120Hz on Apple Silicon Macs</h3>
+            <p>Apple Silicon Macs can support 4K@120Hz over HDMI using EDID overrides:</p>
+            <ol>
+              <li>Install <a href="https://github.com/waydabber/BetterDisplay" target="_blank" rel="noopener noreferrer">BetterDisplay</a> and <a href="https://www.analogway.com/americas/products/software-tools/aw-edid-editor/" target="_blank" rel="noopener noreferrer">AW EDID Editor</a></li>
+              <li>Export your display's EDID binary using BetterDisplay</li>
+              <li>Edit the EDID in AW EDID Editor:
+                <ul>
+                  <li>Change EDID format to V1.4 (change Revision from 3 to 4)</li>
+                  <li>Change Video Interface bits to DisplayPort (0101)</li>
+                </ul>
+              </li>
+              <li>Upload and apply the modified EDID in BetterDisplay</li>
+              <li>Set your resolution to 4K@120Hz</li>
+            </ol>
+            <p>Note: Some adapters may need firmware updates. <a href="https://forums.macrumors.com/threads/mac-mini-4k-120hz.2267035/page-31?post=31952813#post-31952813" target="_blank" rel="noopener noreferrer">More details on MacRumors</a></p>
+          </div>
+
+          <div className="dimension-card">
+            <h3>TestUFO - Verify Your Settings</h3>
+            <p>Use <a href="https://www.testufo.com/refreshrate" target="_blank" rel="noopener noreferrer">TestUFO</a> to verify your display's refresh rate and resolution:</p>
+            <ul>
+              <li>Close other apps and browser tabs</li>
+              <li>Run the test for at least 30 seconds</li>
+              <li>Use full-screen mode</li>
+            </ul>
+            <p>TestUFO helps identify frame skipping and confirms if your custom settings are actually working.</p>
+          </div>
+
+          <div className="warning-box">
+            <h3>💡 Tips</h3>
+            <ul>
+              <li>For external displays, try "Default for display" first</li>
+              <li>Hold Option key in Display settings to access HiDPI modes</li>
+              <li>Some USB-C to HDMI adapters work better than others for high refresh rates</li>
+              <li>YCbCr422 color format is typically used for 4K@120Hz</li>
             </ul>
           </div>
         </section>
